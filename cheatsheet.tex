@@ -1,0 +1,367 @@
+\documentclass[a4paper]{article}
+\usepackage{amssymb,amsmath,amsthm,amsfonts}
+\usepackage{multicol,multirow}
+\usepackage{calc}
+\usepackage{ifthen}
+\usepackage[landscape]{geometry}
+\usepackage[colorlinks=true,citecolor=blue,linkcolor=blue]{hyperref}
+\usepackage{graphicx}
+
+\renewcommand\refname{References and further reading}
+
+\ifthenelse{\lengthtest { \paperwidth = 11in}}
+    { \geometry{top=.5in,left=.5in,right=.5in,bottom=.5in} }
+	{\ifthenelse{ \lengthtest{ \paperwidth = 297mm}}
+		{\geometry{top=1cm,left=1cm,right=1cm,bottom=1cm} }
+		{\geometry{top=1cm,left=1cm,right=1cm,bottom=1cm} }
+	}
+
+\pagestyle{empty}
+\makeatletter
+\renewcommand{\section}{\@startsection{section}{1}{0mm}%
+                                {-1ex plus -.5ex minus -.2ex}%
+                                {0.5ex plus .2ex}%x
+                                {\normalfont\large\bfseries}}
+\renewcommand{\subsection}{\@startsection{subsection}{2}{0mm}%
+                                {-1explus -.5ex minus -.2ex}%
+                                {0.5ex plus .2ex}%
+                                {\normalfont\normalsize\bfseries}}
+\renewcommand{\subsubsection}{\@startsection{subsubsection}{3}{0mm}%
+                                {-1ex plus -.5ex minus -.2ex}%
+                                {1ex plus .2ex}%
+                                {\normalfont\small\bfseries}}
+\makeatother
+\setcounter{secnumdepth}{0}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt plus 0.5ex}
+% -----------------------------------------------------------------------
+
+\title{ZK-SNARKS Cheatsheet Version 0.9}
+
+\begin{document}
+
+\raggedright
+\footnotesize
+
+\begin{center}
+     \Large{\textbf{zk-SNARKS Cheatsheet v0.9}} \\
+     \vspace{0.3 cm}
+     \small{Erik Brauer} \\
+     \small{\textit{Iomete Labs}} \\
+     \small{erik@iometelabs.io}
+     \vspace{0.2 cm}
+\end{center}
+\begin{multicols}{3}
+\setlength{\premulticols}{1pt}
+\setlength{\postmulticols}{1pt}
+\setlength{\multicolsep}{1pt}
+\setlength{\columnsep}{2pt}
+
+\section{Definitions}
+
+\subsection{General}
+\subsubsection{Properties of ZKPs\textsuperscript{\cite{7}}}
+\begin{align*}
+    & \text{1. Completeness: Given a statement and a witness, the prover} \\
+    & \text{can convince the verifier.} \\
+    & \text{2. Soundness: A malicious prover cannot convince the verifier of} \\
+    & \text{a false statement.} \\
+    & \text{3. Zero-Knowledge: The proof does not reveal anything but the} \\
+    & \text{truth of the statement, i.e. it does not reveal the provers witness.} \\
+    & \text{Additional for SNARKS: Succinctness, Non-interactiveness}
+\end{align*}
+
+\subsection{Set of p-adic integers}
+\begin{align*}
+    & \mathbb{Z}_p := \{\sum_{i=0}^{\infty} a_i p^i | a_i \in \{0,1,...,p-1\}\} , \:  p \in \mathbb{P}
+\end{align*}
+\subsubsection{$\mathbb{Z}_p^*$ Group\textsuperscript{\cite{1}}}
+\begin{align*}
+    & \text{cyclic} \Leftrightarrow \exists g \in \mathbb{Z}_p^* \text{ s.t. } \mathbb{Z}_p^* = \{g^a | a \in \{0,...,p-2\}; g^0=1\} \\
+    & \text{discrete logarithm problem (DLP) believed to be hard in $\mathbb{Z}_p^*$} \\
+    & \text{group operation: } g^a\cdot g^b = g^{a+b (mod \: p-1)} \: \forall a,b \in \mathbb{Z}_{p-1}
+\end{align*}
+\subsubsection{$(\mathbb{F}_p,+,\cdot)$ Field}
+\begin{align*}
+    & \mathbb{F}_p = \{0,...,p-1\} \\
+    & \text{multiplication and addition over the field are also done $mod(p)$}
+\end{align*}
+
+\subsection{Kleene star}
+\begin{align*}
+    & \text{Given a set $S$:} \\
+    & S^* = \bigcup\limits_{i\geq0} S^{i} = S^0 \cup S^1 \cup S^2 \cup ... \\
+    & \text{e.g.: } \{a,b,c\}^* = \{\epsilon,a,b,c,aa,ab,ac,ba,bb,bc,ca,cb,cc, aaa,aab,...\}
+\end{align*}
+
+\subsection{Pairings}
+\begin{align*}
+    & \text{$G_1$,$G_2$,$G_T$ groups and $|G_T| = p$} \\ 
+    & \text{$P \in G_1$, $Q \in G_2$ generators of $G_1$ and $G_2$} \\
+    & e: G_1 \times G_2 \rightarrow G_T \text{ with the following properties: } \\
+    & \text{1. Bilinearity: } \forall a,b \in \mathbb{Z}: e(aP,bQ) = e(P,Q)^{ab} \\
+    & \text{2. Non-Degeneracy: } e(P,Q) \neq 1 \\
+    & \text{3. Efficient Computability} \\
+    & \text{Symmetric iff $G_1 = G_2 = G$} \\
+    & \text{Commutative iff $G$ cyclic: } e(P,Q)=e(Q,P)
+\end{align*}
+
+\subsection{Elliptic-Curve Cryptography\textsuperscript{\cite{1,18,8}}}
+\begin{align*}
+    & \text{Define elliptic curve $\mathcal{C} = \{(x,y)|y^2=x^3+ax+b$ for some $a,b \in \mathbb{F}_p\}$} \\
+    & \text{Group } \mathcal{C}(\mathbb{F}_p) = \{(x,y) | (x,y) \in \mathbb{F}_p^2 \text{ are on } \mathcal{C}\} \text{ with $e = \mathcal{O}$} \\
+    & \text{$+$ rule: } P+Q+R=\mathcal{O} \Rightarrow P+Q=-R \\
+    & \text{(mirror intersection point of line passed by $(P,Q) \in \mathcal{C}(\mathbb{F}_p)$)} \\
+    & |\mathcal{C}(\mathbb{F}_p)| = r, \: r \neq p \in \mathbb{P} \\
+    & \text{embedding degree of $\mathcal{C}$: smallest int $k$ s.t. $\textstyle (p^k-1 \text{ mod } r) = 0$} \\
+    & \text{DLP for sufficiently large $k$ is "very hard"}
+\end{align*}
+
+\subsubsection{Tate Reduced Pairings}
+\begin{align*}
+    & \text{Define subgroup $G_T$ of multiplicative group $\mathcal
+    {C}(\mathbb{F}_{p^k})$ with order $r$} \\
+    & \text{$\mathcal{C}(\mathbb{F}_{p^k})$ contains $r-1$ additional subgroups of order $r$} \\
+    & \text{Generators $g \in G_1, h \in G_2$} \\
+    & \text{1. $\text{Tate}(g,h) = \textbf{g}$ for a generator \textbf{g} of $G_T$} \\
+    & \text{2. Given a pair $(a.b) \in \mathbb{F}_r$, $\text{Tate}(a\cdot g,b\cdot h) = g^{a\cdot b}$}
+\end{align*}
+
+\subsection{Homomorphic Hidings\textsuperscript{\cite{1}}}
+\begin{align*}
+    & \text{E(x) over $\mathbb{Z}_p^*$ with following properties:} \\
+    & \text{1. trapdoor function, for given E(x) "hard" to find x} \\
+    & \text{2. Collision-resistance: } x \neq y \Rightarrow E(x) \neq E(y) \: \forall x,y \\
+    & \text{3. homomorphic, algebraic structure-preserving mapping}
+\end{align*}
+
+\subsection{Common Reference String Model\textsuperscript{\cite{1,10}}}
+\begin{align*}
+    & \text{Setup phase: CRS generated according to randomized process} \\
+    & \text{("toxic waste" $\lambda$, has to be destroyed after)} \\
+    & \text{CRS broadcast to all parties, used to construct and verify proofs} \\
+    & \text{divided into "proving key" and "verification key"}
+\end{align*}
+
+\subsection{Polynomial Interpolation}
+\begin{align*}
+    & \text{Lagrange: Given a set of $n+1$ points $(x_0,f_0),...,(x_i,f_i),...,(x_n,f_n)$} \\
+    & \ell_i(x) = \prod_{\substack{j = 0 \\ j\neq i}}^n = \frac{x-x_j}{x_i-x_j} , \: L(x) = \sum_{i=0}^n f_i\ell_i(x) \\
+    & \text{$L(x)$ is the resulting interpolation polynomial in the Lagrange form}
+\end{align*}
+
+\subsection{Merkle Trees}
+\begin{align*}
+    & \text{expansion and extension of hash lists} \\
+    & \text{every leaf node labelled with hash of a data block} \\
+    & \text{nodes further up are hashes of their respective children}
+\end{align*}
+
+\subsection{Pedersen Hash Function\textsuperscript{\cite{11,12}}}
+\begin{align*}
+    & \text{$P_0,...,P_k$ generators of } \mathbb{G} = \{P \in E(\mathbb{F}_p)|rP = O\} \\
+    & \text{Hash } M = M_0 M_1 ... M_k \\
+    & H(M) = \langle M_0 \rangle \cdot P_0 + ... + \langle M_k \rangle \cdot P_k 
+\end{align*}
+
+\subsection{MiMC-p/p\textsuperscript{\cite{13}}}
+\begin{align*}
+    & \text{Encryption function: } E_k(x) = (F_{r-1} \circ F_{r-2} \circ ... \circ F_0)(x) \oplus k \\
+    & \text{$x \in \mathbb{F}_p$ plaintext, $\textstyle r = \frac{\log(p)}{\log_2 (3)}$ number of rounds, $k \in \mathbb{F}_p$ key} \\
+    & \text{round functions over $\mathbb{F}_p$:} \: F_i(x) = (x \oplus k \oplus c_i)^3 \\
+    & \text{$c_i$ random round constants in $\mathbb{F}_p$, $c_0 = 0$}
+\end{align*}
+
+\subsection{Perpetual Powers of Tau Ceremony\textsuperscript{\cite{9}}}
+\begin{align*}
+    & \text{Multi-Party Computation for Trusted Setup Phase} \\
+    & \text{(Parties jointly compute CRS without leaking inputs)} \\
+    & \text{no limit to number of rounds/contributions of participants}
+\end{align*}
+
+\end{multicols}
+\newpage
+\begin{multicols}{3}
+\setlength{\premulticols}{1pt}
+\setlength{\postmulticols}{1pt}
+\setlength{\multicolsep}{1pt}
+\setlength{\columnsep}{2pt}
+\section{Construction from QAP}
+
+\subsection{General\textsuperscript{\cite{5}}}
+\begin{align*}
+    & \text{1. Generation algorithm (trusted setup): Gen$(1^{\lambda},\text{C})\rightarrow$ (crs,vrs)} \\
+    & \text{(secret parameter $\lambda$, circuit C, proving and verification key (crs,vrs))} \\
+    & \text{2. Prover: Prove($\text{crs},u,w$) $\rightarrow \pi$} \\
+    & \text{(some statement $u$, witness $w$, proof $\pi$)} \\
+    & \text{3. Verifier: Ver($\text{vrs},u,\pi$) $\rightarrow 0/1$ }
+\end{align*}
+
+\subsection{QAP Conversion\textsuperscript{\cite{1,3,16}}}
+\subsubsection{Code Flattening}
+\begin{align*}
+    & \text{Convert original code to arithmetic circuit: } \\
+    & x = y, \: \text{($y$ can be variable or number)} \\
+    & x = y (\text{op}) z, \: \text{op} \in (+,-,\cdot,/) \\
+    & \text{($y$ and $z$ can be variables, numbers or sub-expressions)}
+\end{align*}
+
+\subsubsection{Rank-1 Constraint System}
+\begin{align*}
+    & \text{Convert flattened code to constraint system (R1CS): } \\
+    & \langle \underbar{$l_i$},\underbar{$s$}\rangle \cdot \langle \underbar{$r_i$},\underbar{$s$}\rangle - \langle \underbar{$o_i$},\underbar{$s$}\rangle = 0 \: \forall i \\
+    & \text{($\underbar{x}$ denotes a Vector in Tensor notation)} \\
+    & \text{ensures that prover provides valid values for the circuit}
+\end{align*}
+
+\subsubsection{Quadratic Arithmetic Program}
+\begin{align*}
+    & \text{Express R1CS as QAP with Polynomial Interpolation:} \\
+    & \text{QAP $Q$ of degree $d$ and size $m$ consists of polynomials } \\
+    & \text{$L_1,...,L_m,R_1,...,R_m,O_1,...,O_m$ and a target polynomial $T$.} \\
+    & \text{An assignment $(c_1,...,c_m)$ satisfies $Q$ if, defining} \\
+    & P:= L \cdot R - O \text{ for } L := \textstyle \sum c_i\cdot L_i, R := \sum c_i\cdot R_i, O := \sum c_i\cdot O_i \\
+    & \text{we have that $T$ divides $P$.} \\
+    & \text{Alice has a satisfying assignment iff $\exists H: P(s) = H(s)\cdot T(s) \: \forall s \in \mathbb{F}_p$}
+\end{align*}
+
+\subsection{Blind Evaluation of Polynomials\textsuperscript{\cite{1}}}
+\begin{align*}
+    & \text{Alice has polynomial $P$, Bob has random point $s \in \mathbb{F}_p$:} \\
+    & \text{1. Bob sends to Alice the hidings $E(1),E(s),...,E(s^d)$} \\
+    & \text{2. Alice computes $E(P(s))$ and sends the result to Bob} \\
+    & \text{Conclusion: Neither Alice learned $s$, nor Bob learned $P$ (Blindness)} \\
+    & \text{Verifier (B) able to check if prover (A) knows the correct polynomial}
+\end{align*}
+
+\subsubsection{Verifiable BEP}
+\begin{align*}
+    & \text{1. B chooses random $\alpha \in \mathbb{F}_p^*$ and sends to A the hidings} \\
+    & E(1),E(s),...,E(s^d) \text{ and } E(\alpha),E(\alpha s),...,E(\alpha s^d) \\
+    & \text{2. A computes $a = E(P(s))$ and $b = E(\alpha P(s))$, sends both to B} \\
+    & \text{3. B accepts iff $b = \alpha \cdot a$}
+\end{align*}
+
+\subsection{Knowledge of Coefficient Test\textsuperscript{\cite{1,15}}}
+\begin{align*}
+    & \text{Alternatively Knowledge of Exponent (KEA)} \\
+    & \text{Let $\alpha \in \mathbb{F}_p^*$ and $\alpha$-pair $\Leftrightarrow a,b \neq 0 \: \land \: b = \alpha \cdot a \: \forall (a,b) \in G$} \\
+    & \text{1. Bob chooses random $\alpha \in \mathbb{F}_p^*$ and $a \in G$. He computes $b=\alpha \cdot a$.} \\
+    & \text{2. He sends to Alice the challenge pair $(a,b)$.} \\
+    & \text{3. Alice must now respond with a different $\alpha$-pair $(a',b')$.} \\
+    & \text{4. Bob accepts Alice's response iff $(a',b')$ is an $\alpha$-pair.}
+\end{align*}
+\subsubsection{KC Assumption}
+\begin{align*}
+    & \text{Alice chooses some $\gamma \in \mathbb{F}_p^*$ and responds with $(a',b')=(\gamma\cdot a,\gamma\cdot b)$} \\
+    & \text{Whenever Alice successfully responds with an $\alpha$-pair $(a',b')$,} \\
+    & \text{Alice's Extractor outputs $\gamma$ s.t. $a' = \gamma\cdot a$.}
+\end{align*}
+
+\subsubsection{d-KCA}
+\begin{align*}
+    & \text{Bob chooses random $\alpha \in \mathbb{F}_p^*$, $s \in \mathbb{F}_p$, sends to Alice the $\alpha$-pairs } \\
+    & (g,\alpha\cdot g),(s\cdot g, \alpha s\cdot g),...,(s^d\cdot g, \alpha s^d\cdot g) \text{. A outputs an $\alpha$-pair $(a',b')$} \\
+    & \Leftrightarrow \text{A knows $c_1,...,c_d$ s.t. $\textstyle \sum_{i=1}^d c_i \cdot a_i$}
+\end{align*}
+
+\subsection{Pinocchio Protocol (PHGR13)\textsuperscript{\cite{1,17}}}
+\begin{align*}
+    & \text{1. Alice chooses $L,R,O,H$ of degree at most $d$.} \\
+    & \text{2. Bob chooses a random point $s \in \mathbb{F}_p$, computes $E(T(s))$.} \\
+    & \text{3. Alice sends Bob $E(L(s)),E(R(s)),E(O(s)),E(H(s))$.} \\
+    & \text{4. Bob checks whether $E(L(s)\cdot R(s)-O(s)) = E(T(s)\cdot H(s))$.} \\
+    & \text{Note: An extended version of KCA is used to make sure Alice} \\ 
+    & \text{chooses the polynomials produced from an assignment.} \\
+    & \text{Alice conceals her assignment by adding a random $T$-shift to} \\
+    & \text{each polynomial. ("free" zero-knowledge)}
+\end{align*}
+
+\subsection{Non-Interactive Evaluation Protocol\textsuperscript{\cite{1}}}
+\begin{align*}
+    & \text{1. Setup: Random $\alpha \in \mathbb{F}_r^*, s \in \mathbb{F}_r$ are chosen and CRS is published:} \\
+    & (E_1(1),E_1(s),...,E_1(s^d),E_2(\alpha),E_2(\alpha s),...,E_2(\alpha s^d)) \\
+    & \text{2. Proof: Alice computes $a = E_1(P(s))$ and $b = E_2(\alpha P(s))$} \\
+    & \text{3. Verification: Fix $x,y \in \mathbb{F}_r$ s.t. $a = E_1(x)$ and $b = E_2(y)$} \\
+    & \text{Bob computes $E(\alpha x) = \text{Tate}(E_1(x),E_2(\alpha))$ and} \\
+    & E(y) = \text{Tate}(E_1(1),E_2(y)) \text{ and checks if $E(\alpha x) = E(y)$.}
+\end{align*}
+
+\subsection{Groth16\textsuperscript{\cite{7}}}
+\begin{align*}
+    & \text{smaller proofs, faster proving and verification time compared} \\ 
+    & \text{to Pinocchio (PHGR13)} \\
+    & \text{comparison between Groth16 and PHGR13:} \\
+    & \begin{tabular}{ |c|c|c|c| } 
+    \hline
+     Protocols & CRS size & Proof size & Verification time \\ 
+    \hline
+     PHGR13 & linear circuit & 7 $G_1$, 1 $G_2$ & 12 pairings \\ 
+     Groth16 & size & 2 $G_1$, 1 $G_2$ & 3 pairings \\ 
+    \hline
+    \end{tabular}
+\end{align*}
+
+\end{multicols}
+
+\newpage
+
+\begin{thebibliography}{9}
+\vspace{4mm}
+\bibitem{1}
+Gabizon, A.: \textit{Explaining Snarks} (Parts I-VII) [\url{https://electriccoin.co/blog/snark-explain/}]
+
+\bibitem{2}
+Matter Labs: \textit{Awesome zero knowledge proofs}  [\url{https://github.com/matter-labs/awesome-zero-knowledge-proofs}]
+
+\bibitem{3}
+Buterin, V.: \textit{Quadratic Arithmetic Programs: from Zero to Hero} [\url{https://medium.com/@VitalikButerin/quadratic-arithmetic-programs-from-zero-to-hero-f6d558cea649}]
+
+\bibitem{18}
+Buterin, V.: \textit{Exploring Elliptic Curve Pairings} [\url{https://medium.com/@VitalikButerin/exploring-elliptic-curve-pairings-c73c1864e627}]
+
+\bibitem{19}
+Buterin, V.: \textit{Zk-SNARKs: Under the Hood} [\url{https://medium.com/@VitalikButerin/zk-snarks-under-the-hood-b33151a013f6}]
+
+\bibitem{8}
+Sullivan, N.: \textit{A (Relatively Easy To Understand) Primer on Elliptic Curve Cryptography} [\url{https://blog.cloudflare.com/a-relatively-easy-to-understand-primer-on-elliptic-curve-cryptography/}]
+
+\bibitem{4}
+Petkus, M.: \textit{Why and How zk-SNARK Works} [\url{https://arxiv.org/abs/1906.07221}]
+
+\bibitem{5}
+Nitulescu, A.: \textit{zk-SNARKs: A Gentle Introduction} [\url{https://www.di.ens.fr/~nitulesc/files/Survey-SNARKs.pdf}]
+
+\bibitem{7}
+Groth, J.: \textit{On the Size of Pairing-based Non-interactive Arguments} [\url{https://eprint.iacr.org/2016/260.pdf}]
+
+\bibitem{14}
+Ben-Sasson, E. et al.: \textit{Succinct Non-Interactive Zero Knowledge for a von Neumann Architecture} [\url{https://eprint.iacr.org/2013/879.pdf}]
+
+\bibitem{15}
+Groth, J.: \textit{Short Pairing-based Non-interactive Zero-Knowledge Arguments} [\url{http://www0.cs.ucl.ac.uk/staff/J.Groth/ShortNIZK.pdf}]
+
+\bibitem{16}
+Gennaro, R. et al.: \textit{Quadratic Span Programs and Succinct NIZKs without PCPs} [\url{https://eprint.iacr.org/2012/215.pdf}]
+
+\bibitem{17}
+Parno, B. et al.: \textit{Pinocchio: Nearly Practical Verifiable Computation} [\url{https://eprint.iacr.org/2013/279.pdf}]
+
+\bibitem{9}
+Wei Jie, K.: \textit{Announcing the Perpetual Powers of Tau Ceremony to benefit all zk-SNARK projects} [\url{https://medium.com/coinmonks/announcing-the-perpetual-powers-of-tau-ceremony-to-benefit-all-zk-snark-projects-c3da86af8377}]
+
+\bibitem{10}
+Bottinelli, P.: \textit{Security Considerations of zk-SNARK Parameter Multi-Party Computation} [\url{https://research.nccgroup.com/2020/06/24/security-considerations-of-zk-snark-parameter-multi-party-computation/}]
+
+\bibitem{11}
+Hopwood, D. et al.: \textit{Zcash Protocol Specification} [\url{https://github.com/zcash/zips/blob/master/protocol/sapling.pdf}]
+
+\bibitem{12}
+Baylina, J. et al.: \textit{4-bit Window Pedersen Hash On The Baby Jubjub Elliptic Curve} [\url{https://iden3-docs.readthedocs.io/en/latest/iden3_repos/research/publications/zkproof-standards-workshop-2/pedersen-hash/pedersen.html}]
+
+\bibitem{13}
+Albrecht, M. et al.: \textit{MiMC: Efficient Encryption and Cryptographic Hashing with Minimal Multiplicative Complexity} [\url{https://eprint.iacr.org/2016/492.pdf}]
+
+\end{thebibliography}
+
+\end{document}
